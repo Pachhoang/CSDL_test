@@ -1,0 +1,144 @@
+-- PHẦN 0: KHỞI TẠO CƠ SỞ DỮ LIỆU
+DROP DATABASE IF EXISTS HACKATHON;
+CREATE DATABASE HACKATHON;
+USE HACKATHON;
+
+-- 1. Tạo bảng
+CREATE TABLE Users(
+    user_id VARCHAR(5) PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phone VARCHAR(15) UNIQUE NOT NULL
+);
+
+CREATE TABLE Categories(
+    category_id VARCHAR(5) PRIMARY KEY,
+    category_name VARCHAR(100) UNIQUE NOT NULL
+);
+
+CREATE TABLE Book(
+    book_id VARCHAR(5) PRIMARY KEY,
+    title VARCHAR(100) UNIQUE NOT NULL,
+    category_id VARCHAR(5),
+    price DECIMAL(10,2) NOT NULL,
+    stock INT NOT NULL,
+    FOREIGN KEY (category_id) REFERENCES Categories(category_id)
+);
+
+CREATE TABLE Borrows(
+    borrow_id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id VARCHAR(5),
+    book_id VARCHAR(5),
+    borrow_date DATE NOT NULL, -- Đảo lại cho đúng logic INSERT bên dưới
+    status ENUM('Borrowing', 'Returned', 'Lost') NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES Users(user_id),
+    FOREIGN KEY (book_id) REFERENCES Book(book_id)
+);
+
+-- 2. Chèn dữ liệu mẫu
+INSERT INTO Users (user_id, full_name, email, phone) VALUES
+('U01','Nguyễn Văn An','a@m.com','0912345678'),
+('U02','Trần Thị Bích','b@m.com ','0923456789'),
+('U03','Lê Hoàng Minh','mi@m.com','0934567890'),
+('U04','Phạm Thu Hà','h@m.com','0945678901'),
+('U05','Võ Quốc Huy','hu@gmail.com','0956789012');
+
+INSERT INTO Categories (category_id, category_name) VALUES
+('C01','IT'),
+('C02','Literature'),
+('C03','Science'),
+('C04','History');
+
+INSERT INTO Book (book_id, title, category_id, price, stock) VALUES
+('B01','Clean Code','C01',250000.00,10),
+('B02','Design Pattern','C01',300000.00,5),
+('B03','Tat Den','C02',50000.00,20),
+('B04','Universe','C03',150000.00,8),
+('B05','Sapiens','C04',200000.00,15);
+
+INSERT INTO Borrows (borrow_id, user_id, book_id, borrow_date, status) VALUES
+(1,'U01','B01','2025-10-01','Borrowing'),
+(2,'U02','B03','2025-10-02','Returned'),
+(3,'U01','B02','2025-10-03','Returned'),
+(4,'U04','B05','2025-10-04','Lost'),
+(5,'U05','B01','2025-10-05','Borrowing');
+
+-- PHẦN 1: CẬP NHẬT VÀ XÓA DỮ LIỆU
+-- 3. Tăng stock thêm 10 và tăng price lên 5% cho sách 'Sapiens'
+UPDATE Book 
+SET stock = stock + 10, price = price * 1.05 
+WHERE title = 'Sapiens';
+
+-- 4. Cập nhật số điện thoại user U03
+UPDATE Users 
+SET phone = '0999999999' 
+WHERE user_id = 'U03';
+
+-- 5. Xóa các bản ghi 'Returned' trước ngày 2025-10-03
+DELETE FROM Borrows 
+WHERE status = 'Returned' AND borrow_date < '2025-10-03';
+
+
+-- PHẦN 2: TRUY VẤN CƠ BẢN
+-- 6. Sách có giá từ 100k - 250k và còn hàng
+SELECT book_id, title, price 
+FROM Book 
+WHERE price BETWEEN 100000 AND 250000 AND stock > 0;
+
+-- 7. Người dùng họ Nguyễn
+SELECT full_name, email 
+FROM Users 
+WHERE full_name LIKE 'Nguyễn %';
+
+-- 8. Danh sách mượn sắp xếp theo ngày giảm dần
+SELECT borrow_id, user_id, borrow_date 
+FROM Borrows 
+ORDER BY borrow_date DESC;
+
+-- 9. Top 3 sách đắt nhất
+SELECT * FROM Book 
+ORDER BY price DESC 
+LIMIT 3;
+
+-- 10. Phân trang: Bỏ 2, lấy 2 sách tiếp theo
+SELECT title, stock 
+FROM Book 
+LIMIT 2 OFFSET 2;
+
+
+-- PHẦN 3: TRUY VẤN NÂNG CAO
+-- 11. Phiếu đang mượn (Borrowing) kèm tên user và tên sách
+SELECT b.borrow_id, u.full_name, bk.title, b.borrow_date
+FROM Borrows b
+JOIN Users u ON b.user_id = u.user_id
+JOIN Book bk ON b.book_id = bk.book_id
+WHERE b.status = 'Borrowing';
+
+-- 12. Tất cả danh mục và sách thuộc danh mục đó (bao gồm danh mục trống)
+SELECT c.category_name, b.title
+FROM Categories c
+LEFT JOIN Book b ON c.category_id = b.category_id;
+
+-- 13. Tổng số lượt mượn theo từng trạng thái
+SELECT status, COUNT(*) AS Total_Borrows
+FROM Borrows
+GROUP BY status;
+
+-- 14. Người dùng có từ 2 lượt mượn trở lên
+SELECT u.full_name, COUNT(b.borrow_id) AS Borrow_Count
+FROM Users u
+JOIN Borrows b ON u.user_id = b.user_id
+GROUP BY u.user_id, u.full_name
+HAVING COUNT(b.borrow_id) >= 2;
+
+-- 15. Sách có giá thấp hơn giá trung bình
+SELECT book_id, title, price 
+FROM Book 
+WHERE price < (SELECT AVG(price) FROM Book);
+
+-- 16. Người dùng từng mượn sách 'Clean Code'
+SELECT DISTINCT u.full_name, u.phone
+FROM Users u
+JOIN Borrows br ON u.user_id = br.user_id
+JOIN Book bk ON br.book_id = bk.book_id
+WHERE bk.title = 'Clean Code';
