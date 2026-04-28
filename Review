@@ -1,0 +1,157 @@
+-- ==========================================
+-- PHẦN 1: CẤU TRÚC VÀ RÀNG BUỘC
+-- ==========================================
+
+CREATE DATABASE review;
+USE review;
+
+CREATE TABLE Users(
+    user_id VARCHAR(5) PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phone VARCHAR(15) NOT NULL,
+    account_type ENUM("Standard","Premium","VIP") NOT NULL,
+    budget_cap DATE NOT NULL
+);
+
+CREATE TABLE Auction_Items(
+    item_id VARCHAR(5) PRIMARY KEY,
+    item_name VARCHAR(100) UNIQUE NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    start_price DECIMAL(15,2) NOT NULL,
+    end_time DATETIME NOT NULL,
+    status ENUM('Active', 'Closed', 'Canceled') NOT NULL
+);
+
+CREATE TABLE Bids(
+    bid_id INT PRIMARY KEY AUTO_INCREMENT,
+    item_id VARCHAR(5),
+    user_id VARCHAR(5),
+    bid_amount DECIMAL(15,2) NOT NULL,
+    bid_time DATETIME NOT NULL,
+    FOREIGN KEY (item_id) REFERENCES Auction_Items(item_id),
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+
+CREATE TABLE Winners(
+    winner_id INT PRIMARY KEY AUTO_INCREMENT,
+    item_id VARCHAR(5),
+    user_id VARCHAR(5),
+    final_price DECIMAL(15,2) NOT NULL,
+    win_date DATE NOT NULL,
+    FOREIGN KEY (item_id) REFERENCES Auction_Items(item_id),
+    FOREIGN KEY (user_id) REFERENCES Users(user_id)
+);
+
+-- CHÈN DỮ LIỆU MẪU
+INSERT INTO Users(user_id, full_name, email, phone, account_type, budget_cap) VALUES
+('U01', 'Nguyễn Anh Quân', 'quan.na@gmail.com', '0912345678', 'Premium', '2025-01-10'),
+('U02', 'Trần Minh Tú', 'tu.tm@gmail.com', '0987654321', 'Standard', '2025-02-15'),
+('U03', 'Lê Thu Thủy', 'thuy.lt@gmail.com', '0978123456', 'Premium', '2025-03-20'),
+('U04', 'Phạm Gia Bảo', 'bao.pg@gmail.com', '0909876543', 'Standard', '2025-04-12');
+
+INSERT INTO Auction_Items VALUES
+('I01', 'Rolex Datejust 1970', 'Jewelry', 50000000, '2025-11-20 20:00:00', 'Active'),
+('I02', 'Tranh sơn dầu Phố Cổ', 'Art', 15000000, '2025-11-21 18:00:00', 'Active'),
+('I03', 'Macbook Pro M3 Max', 'Tech', 35000000, '2025-11-15 10:00:00', 'Closed'),
+('I04', 'Rượu vang đỏ 1990', 'Collectible', 10000000, '2025-12-05 21:00:00', 'Active');
+
+INSERT INTO Bids(item_id, user_id, bid_amount, bid_time) VALUES
+('I01', 'U01', 55000000, '2025-11-10 09:00:00'),
+('I02', 'U02', 16000000, '2025-11-10 10:30:00'),
+('I01', 'U03', 60000000, '2025-11-11 14:00:00'),
+('I03', 'U04', 36000000, '2025-11-12 08:00:00'),
+('I02', 'U01', 17500000, '2025-11-12 15:20:00');
+
+-- CÁC CÂU CẬP NHẬT CẤU TRÚC (c4 - c9)
+-- c4
+UPDATE Auction_Items SET start_price = start_price * 1.15 WHERE item_id = "I01";
+-- c5
+UPDATE Users SET account_type = "VIP" WHERE user_id = 'U02';
+-- c6
+DELETE FROM Bids WHERE bid_amount < 15000000;
+-- c7
+ALTER TABLE Bids ADD CONSTRAINT chk_bid_amount CHECK (bid_amount > 0);
+-- c8
+ALTER TABLE Auction_Items ALTER COLUMN status SET DEFAULT 'Active';
+-- c9
+ALTER TABLE Users ADD COLUMN location VARCHAR(100);
+
+
+-- ==========================================
+-- PHẦN 2: TRUY VẤN DỮ LIỆU CƠ BẢN
+-- ==========================================
+
+-- 1. Sản phẩm Tech hoặc Jewelry
+SELECT * FROM Auction_Items WHERE category IN ('Tech', 'Jewelry');
+
+-- 2. Người dùng có tên chứa 'a'
+SELECT full_name, email FROM Users WHERE full_name LIKE '%a%';
+
+-- 3. Sắp xếp theo end_time tăng dần
+SELECT item_id, item_name, end_time FROM Auction_Items ORDER BY end_time ASC;
+
+-- 4. 3 sản phẩm giá cao nhất
+SELECT * FROM Auction_Items ORDER BY start_price DESC LIMIT 3;
+
+-- 5. Bỏ qua 1, lấy 2 sản phẩm tiếp theo
+SELECT item_name, category FROM Auction_Items LIMIT 2 OFFSET 1;
+
+-- 6. Giảm giá 10% sản phẩm kết thúc trước 12h sáng
+UPDATE Auction_Items SET start_price = start_price * 0.9 WHERE TIME(end_time) < '12:00:00';
+
+-- 7. Chuyển tên thành chữ thường
+UPDATE Users SET full_name = LOWER(full_name);
+
+-- 8. Xóa sản phẩm 'Canceled' (Xử lý Bids trước để tránh lỗi FK)
+DELETE FROM Bids WHERE item_id IN (SELECT item_id FROM Auction_Items WHERE status = 'Canceled');
+DELETE FROM Auction_Items WHERE status = 'Canceled';
+
+
+-- ==========================================
+-- PHẦN 3: TRUY VẤN DỮ LIỆU NÂNG CAO
+-- ==========================================
+
+-- 1. Lượt trả giá của sản phẩm đang 'Active'
+SELECT b.bid_id, u.full_name, i.item_name, b.bid_amount
+FROM Bids b
+JOIN Users u ON b.user_id = u.user_id
+JOIN Auction_Items i ON b.item_id = i.item_id
+WHERE i.status = 'Active';
+
+-- 2. Tất cả sản phẩm và người dùng trả giá (bao gồm cả sản phẩm chưa có bid)
+SELECT i.item_name, u.full_name
+FROM Auction_Items i
+LEFT JOIN Bids b ON i.item_id = b.item_id
+LEFT JOIN Users u ON b.user_id = u.user_id;
+
+-- 3. Tổng tiền trả giá cho mỗi sản phẩm
+SELECT item_id, SUM(bid_amount) AS total_amount FROM Bids GROUP BY item_id;
+
+-- 4. Người tham gia từ 2 sản phẩm trở lên
+SELECT u.full_name, COUNT(DISTINCT b.item_id) as total_items
+FROM Users u
+JOIN Bids b ON u.user_id = b.user_id
+GROUP BY u.user_id, u.full_name
+HAVING COUNT(DISTINCT b.item_id) >= 2;
+
+-- 5. Lượt trả giá thấp hơn trung bình sàn
+SELECT * FROM Bids WHERE bid_amount < (SELECT AVG(bid_amount) FROM Bids);
+
+-- 6. Người dùng trả giá cho Rolex Datejust 1970
+SELECT DISTINCT u.full_name, u.account_type
+FROM Users u
+JOIN Bids b ON u.user_id = b.user_id
+JOIN Auction_Items i ON b.item_id = i.item_id
+WHERE i.item_name = 'Rolex Datejust 1970';
+
+-- 7. Sản phẩm kết thúc trong tháng 11/2025
+SELECT * FROM Auction_Items WHERE end_time BETWEEN '2025-11-01 00:00:00' AND '2025-11-30 23:59:59';
+
+-- 8. Người dẫn đầu cho mỗi sản phẩm
+SELECT b.item_id, u.full_name, b.bid_amount
+FROM Bids b
+JOIN Users u ON b.user_id = u.user_id
+WHERE (b.item_id, b.bid_amount) IN (
+    SELECT item_id, MAX(bid_amount) FROM Bids GROUP BY item_id
+);
