@@ -1,0 +1,138 @@
+-- ==========================================
+-- PHẦN 1 & 2: KHỞI TẠO VÀ DỮ LIỆU (Đã fix lỗi)
+-- ==========================================
+CREATE DATABASE kiemtrachatluong;
+USE kiemtrachatluong;
+
+CREATE TABLE Books(
+    book_id VARCHAR(5) PRIMARY KEY,
+    title VARCHAR(150) UNIQUE NOT NULL,
+    author VARCHAR(100) NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    status ENUM('Available', 'Borrowed', 'Lost') DEFAULT('Available'),
+    published_year INT NOT NULL
+);
+
+CREATE TABLE Members(
+    member_id VARCHAR(5) PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    phone VARCHAR(15) NOT NULL,
+    membership_type ENUM('Student', 'Teacher', 'Guest')
+);
+
+CREATE TABLE Loans(
+    loan_id INT PRIMARY KEY AUTO_INCREMENT,
+    book_id VARCHAR(5),
+    member_id VARCHAR(5),
+    loan_date DATE NOT NULL,
+    return_date DATE,
+    FOREIGN KEY (book_id) REFERENCES Books(book_id),
+    FOREIGN KEY (member_id) REFERENCES Members(member_id)
+);
+
+CREATE TABLE Fines(
+    fine_id INT PRIMARY KEY AUTO_INCREMENT,
+    loan_id INT,
+    fine_amount DECIMAL(10,2) NOT NULL,
+    fine_reason VARCHAR(255),
+    FOREIGN KEY (loan_id) REFERENCES Loans(loan_id)
+);
+
+-- CHÈN DỮ LIỆU
+INSERT INTO Books(book_id, title, author, category, price, status, published_year) VALUES
+('B01', 'Đất rừng phương Nam', 'Đoàn Giỏi', 'Tiểu thuyết', 120000.00, 'Available', 2020),
+('B02', 'Lập trình Python', 'Nguyễn Anh', 'Công nghệ', 250000.00, 'Borrowed', 2022),
+('B03', 'Kỹ thuật lập trình C', 'Lê Nam', 'Công nghệ', 180000.00, 'Available', 2021),
+('B04', 'Số đỏ', 'Vũ Trọng Phụng', 'Tiểu thuyết', 85000.00, 'Borrowed', 2019),
+('B05', 'Tư duy logic', 'Phạm Minh', 'Kỹ năng', 150000.00, 'Available', 2023);
+
+INSERT INTO Members VALUES
+('M01', 'Trần Văn An', 'an.tv@gmail.com', '0912345678', 'Student'),
+('M02', 'Nguyễn Thị Bình', 'binh.nt@gmail.com', '0987654321', 'Teacher'),
+('M03', 'Nguyễn Minh Hiếu', 'hieu.nm@gmail.com', '0911223344', 'Student'),
+('M04', 'Phạm Bảo Ngọc', 'ngoc.pb@gmail.com', '0922334455', 'Guest'),
+('M05', 'Lê Hồng Anh', 'anh.lh@gmail.com', '0933445566', 'Student');
+
+INSERT INTO Loans VALUES
+(1, 'B02', 'M01', '2025-11-10', '2025-11-20'),
+(2, 'B04', 'M03', '2025-11-12', NULL),
+(3, 'B01', 'M02', '2025-11-15', '2025-11-25'),
+(4, 'B02', 'M05', '2025-12-01', NULL),
+(5, 'B03', 'M01', '2025-12-05', '2025-12-15'),
+(6, 'B05', 'M03', '2025-12-10', NULL);
+
+INSERT INTO Fines VALUES
+(1, 1, 15000.00, 'Quá hạn 5 ngày'),
+(2, 3, 5000.00, 'Làm rách trang sách'),
+(3, 5, 20000.00, 'Quá hạn 7 ngày');
+
+-- CÁC CÂU LỆNH UPDATE/DELETE CỦA BẠN
+UPDATE Members SET membership_type = 'Teacher' WHERE member_id = 'M01';
+UPDATE Books SET price = price * 1.05 WHERE category = 'Công nghệ';
+DELETE FROM Fines WHERE fine_amount < 10000;
+UPDATE Books SET status = 'Lost' WHERE published_year < 2020;
+UPDATE Loans SET return_date = current_date() WHERE member_id = 'M01' AND return_date IS NULL;
+
+-- ==========================================
+-- PHẦN 3: TRUY VẤN CƠ BẢN (TIẾP THEO)
+-- ==========================================
+
+-- 8. Danh sách độc giả sắp xếp A-Z theo tên
+SELECT member_id, full_name, phone 
+FROM Members 
+ORDER BY full_name ASC;
+
+-- ==========================================
+-- PHẦN 4: TRUY VẤN NÂNG CAO (JOIN & GROUP BY)
+-- ==========================================
+
+-- 1. Thông tin mượn sách của độc giả loại 'Student'
+SELECT l.loan_id, m.full_name, b.title, l.loan_date
+FROM Loans l
+JOIN Members m ON l.member_id = m.member_id
+JOIN Books b ON l.book_id = b.book_id
+WHERE m.membership_type = 'Student';
+
+-- 2. Thống kê mỗi thể loại có bao nhiêu cuốn sách
+SELECT category, COUNT(*) AS total_books
+FROM Books
+GROUP BY category;
+
+-- 3. Liệt kê độc giả và tổng số lần mượn (kể cả người chưa mượn)
+SELECT m.full_name, COUNT(l.loan_id) AS total_loans
+FROM Members m
+LEFT JOIN Loans l ON m.member_id = l.member_id
+GROUP BY m.member_id, m.full_name;
+
+-- 4. Tìm các cuốn sách chưa từng được mượn
+SELECT * FROM Books
+WHERE book_id NOT IN (SELECT DISTINCT book_id FROM Loans);
+
+-- 5. Tính tổng số tiền phạt mỗi độc giả (full_name, total_fine)
+SELECT m.full_name, SUM(f.fine_amount) AS total_fine
+FROM Members m
+JOIN Loans l ON m.member_id = l.member_id
+JOIN Fines f ON l.loan_id = f.loan_id
+GROUP BY m.member_id, m.full_name;
+
+-- 6. Độc giả đã mượn trên 2 cuốn sách khác nhau
+SELECT m.full_name
+FROM Members m
+JOIN Loans l ON m.member_id = l.member_id
+GROUP BY m.member_id, m.full_name
+HAVING COUNT(DISTINCT l.book_id) > 2;
+
+-- 7. Độc giả mượn cuốn sách có giá cao nhất
+SELECT m.full_name, b.title, b.price
+FROM Loans l
+JOIN Members m ON l.member_id = m.member_id
+JOIN Books b ON l.book_id = b.book_id
+WHERE b.price = (SELECT MAX(price) FROM Books);
+
+-- 8. Thông tin sách 'Tiểu thuyết' đã được mượn ít nhất một lần
+SELECT DISTINCT b.*
+FROM Books b
+JOIN Loans l ON b.book_id = l.book_id
+WHERE b.category = 'Tiểu thuyết';
