@@ -1,0 +1,118 @@
+-- =============================================================
+-- KHỞI TẠO CƠ SỞ DỮ LIỆU
+-- =============================================================
+DROP DATABASE IF EXISTS StudentManagement;
+CREATE DATABASE StudentManagement;
+USE StudentManagement;
+
+-- 1. Bảng sinh viên
+CREATE TABLE students (
+    student_id VARCHAR(5) PRIMARY KEY,
+    full_name VARCHAR(50) NOT NULL,
+    total_debt DECIMAL(10,2) DEFAULT 0
+);
+
+-- 2. Bảng môn học
+CREATE TABLE subjects (
+    subject_id VARCHAR(5) PRIMARY KEY,
+    subject_name VARCHAR(50) NOT NULL,
+    credits INT CHECK (credits > 0)
+);
+
+-- 3. Bảng điểm số
+CREATE TABLE grades (
+    student_id VARCHAR(5),
+    subject_id VARCHAR(5),
+    score DECIMAL(4,2),
+    PRIMARY KEY (student_id, subject_id),
+    FOREIGN KEY (student_id) REFERENCES students(student_id),
+    FOREIGN KEY (subject_id) REFERENCES subjects(subject_id)
+);
+
+-- 4. Bảng lịch sử sửa điểm
+CREATE TABLE grade_log (
+    log_id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id VARCHAR(5),
+    old_score DECIMAL(4,2),
+    new_score DECIMAL(4,2),
+    change_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(student_id)
+);
+
+-- Chèn dữ liệu mẫu ban đầu
+INSERT INTO students (student_id, full_name, total_debt) VALUES ('SV01', 'Hoàng Triệu Gia Bách', 2000000);
+INSERT INTO subjects (subject_id, subject_name, credits) VALUES ('MH01', 'Cơ sở dữ liệu', 3);
+
+-- =============================================================
+-- PHẦN A: CƠ BẢN
+-- =============================================================
+
+-- Câu 1: Trigger chuẩn hóa điểm số (0 - 10)
+DELIMITER //
+CREATE TRIGGER tg_check_score
+BEFORE INSERT ON grades
+FOR EACH ROW
+BEGIN
+    IF NEW.score < 0 THEN 
+        SET NEW.score = 0;
+    ELSEIF NEW.score > 10 THEN 
+        SET NEW.score = 10;
+    END IF;
+END //
+DELIMITER ;
+
+-- Câu 2: Transaction thêm sinh viên mới an toàn
+START TRANSACTION;
+
+INSERT INTO students (student_id, full_name, total_debt) 
+VALUES ('SV02', 'Ha Bich Ngoc', 0);
+
+UPDATE students 
+SET total_debt = 5000000 
+WHERE student_id = 'SV02';
+
+COMMIT;
+
+-- =============================================================
+-- PHẦN B: KHÁ
+-- =============================================================
+
+-- Câu 3: Trigger ghi nhật ký thay đổi điểm
+DELIMITER //
+CREATE TRIGGER tg_log_grade_update
+AFTER UPDATE ON grades
+FOR EACH ROW
+BEGIN
+    -- Chỉ ghi log nếu điểm số thực sự bị thay đổi
+    IF OLD.score <> NEW.score THEN
+        INSERT INTO grade_log (student_id, old_score, new_score, change_date)
+        VALUES (OLD.student_id, OLD.score, NEW.score, NOW());
+    END IF;
+END //
+DELIMITER ;
+
+-- Câu 4: Procedure đóng học phí có kiểm tra nợ âm
+DELIMITER //
+CREATE PROCEDURE sp_pay_tuition()
+BEGIN
+    DECLARE v_debt DECIMAL(10,2);
+    
+    START TRANSACTION;
+    
+    -- Thực hiện trừ nợ
+    UPDATE students 
+    SET total_debt = total_debt - 2000000 
+    WHERE student_id = 'SV01';
+    
+    -- Kiểm tra số dư nợ sau khi trừ
+    SELECT total_debt INTO v_debt FROM students WHERE student_id = 'SV01';
+    
+    IF v_debt < 0 THEN
+        -- Nếu nợ âm thì hủy giao dịch
+        ROLLBACK;
+    ELSE
+        -- Nếu hợp lệ thì xác nhận
+        COMMIT;
+    END IF;
+END //
+DELIMITER ;
